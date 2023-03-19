@@ -18,7 +18,7 @@ setup(
         "Programming Language :: Python :: 3.9",
         "Programming Language :: Python :: 3.10",
     ],
-    author="Arthur",
+    author="Arthur A",
     author_email="arthurraugustus@gmail.com",
     description="A Python package to send emails using SMTP providers.",
 )

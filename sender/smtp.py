@@ -81,10 +81,3 @@ class EmailSender:
         to_emails = msg["To"].split(", ") + msg.get("Cc", "").split(", ") + msg.get("Bcc", "").split(", ")
         self.smtp.sendmail(msg["From"], to_emails, msg.as_string())
 
-    def attachment_generator(self, file_paths):
-        for file_path in file_paths:
-            with open(file_path, "rb") as f:
-                file_data = f.read()
-                file_name = file_path.split("/")[-1]
-                yield file_name, base64.b64encode(file_data).decode('utf-8')
-
