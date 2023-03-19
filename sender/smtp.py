@@ -1,43 +1,43 @@
+from email.mime.application import MIMEApplication
 import smtplib
 import base64
-import mimetypes
 import logging
 from email.mime.multipart import MIMEMultipart
 from email.mime.base import MIMEBase
 from email.mime.text import MIMEText
 from email import encoders
-from functools import wraps
+import os
+from typing import Optional, List, Tuple
 
 def attach_files_decorator(func):
-    @wraps(func)
-    def wrapper(*args, **kwargs):
-        msg, file_attachments, base64_attachments = func(*args, **kwargs)
+    def wrapper(self, msg, file_attachments=None, base64_attachments=None):
+        file_attachments = file_attachments or []
+        base64_attachments = base64_attachments or []
+
         for file_path in file_attachments:
             with open(file_path, "rb") as f:
-                file_data = f.read()
-                file_name = file_path.split("/")[-1]
-                content_type, encoding = mimetypes.guess_type(file_path)
-                if content_type is None or encoding is not None:
-                    content_type = "application/octet-stream"
-                main_type, sub_type = content_type.split("/", 1)
-                attachment = MIMEBase(main_type, sub_type)
-                attachment.set_payload(file_data)
+                attachment = MIMEBase("application", "octet-stream")
+                attachment.set_payload(f.read())
                 encoders.encode_base64(attachment)
-                attachment.add_header("Content-Disposition", f"attachment; filename={file_name}")
+                attachment.add_header(
+                    "Content-Disposition",
+                    f"attachment; filename={os.path.basename(file_path)}",
+                )
                 msg.attach(attachment)
-        for file_name, base64_content in base64_attachments:
-            file_data = base64.b64decode(base64_content)
-            content_type, encoding = mimetypes.guess_type(file_name)
-            if content_type is None or encoding is not None:
-                content_type = "application/octet-stream"
-            main_type, sub_type = content_type.split("/", 1)
-            attachment = MIMEBase(main_type, sub_type)
-            attachment.set_payload(file_data)
-            encoders.encode_base64(attachment)
-            attachment.add_header("Content-Disposition", f"attachment; filename={file_name}")
+
+        for filename, base64_data in base64_attachments:
+            file_data = base64.b64decode(base64_data)
+            attachment = MIMEApplication(
+                file_data, _subtype="octet-stream", _encoder=encoders.encode_base64
+            )
+            attachment.add_header("Content-Disposition", "attachment", filename=filename)
             msg.attach(attachment)
-        return msg
+
+        return func(self, msg)
+
     return wrapper
+
+
 
 class EmailSender:
     def __init__(self, smtp_server, smtp_port, smtp_user, smtp_password, use_tls=True):
@@ -73,11 +73,17 @@ class EmailSender:
         return msg
 
     @attach_files_decorator
-    def attach_files(self, msg, file_attachments, base64_attachments):
-        return msg, file_attachments, base64_attachments
+    def send_email(
+            self,
+            msg: MIMEMultipart,
+            file_attachments: Optional[List[str]] = None,
+            base64_attachments: Optional[List[Tuple[str, str]]] = None,
+        ):
+        recipients = []
+        if msg["To"]:
+            recipients += msg["To"].split(",")
+        if msg["Cc"]:
+            recipients += msg["Cc"].split(",")
 
-    def send_email(self, msg, file_attachments=None, base64_attachments=None):
-        msg = self.attach_files(msg, file_attachments or [], base64_attachments or [])
-        to_emails = msg["To"].split(", ") + msg.get("Cc", "").split(", ") + msg.get("Bcc", "").split(", ")
-        self.smtp.sendmail(msg["From"], to_emails, msg.as_string())
+        self.smtp.sendmail(msg["From"], recipients, msg.as_string())
 
